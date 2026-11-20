@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Employee Master Data Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<style>
+:root{--bg:#f4f6fb;--card:#fff;--ink:#1c2333;--mut:#667085;--line:#e3e7ef;--pri:#3b5bdb;--pri2:#eef2ff;--ok:#12805c;--okbg:#e6f6ef;--warn:#b54708;--warnbg:#fff4e5;--bad:#c0392b;--badbg:#fdecea;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12161f;--card:#1a2030;--ink:#e8ecf5;--mut:#9aa4b8;--line:#2b3347;--pri:#7c93ff;--pri2:#232b47;--ok:#4cd0a0;--okbg:#14332a;--warn:#ffb86b;--warnbg:#3a2c16;--bad:#ff8a7a;--badbg:#3b1d1a}}
+:root[data-theme="dark"]{--bg:#12161f;--card:#1a2030;--ink:#e8ecf5;--mut:#9aa4b8;--line:#2b3347;--pri:#7c93ff;--pri2:#232b47;--ok:#4cd0a0;--okbg:#14332a;--warn:#ffb86b;--warnbg:#3a2c16;--bad:#ff8a7a;--badbg:#3b1d1a}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+.wrap{max-width:1180px;margin:0 auto;padding:20px 16px 48px}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:18px}
+h1{font-size:22px;margin:0}.sub{color:var(--mut);margin-top:2px}
+.btn{border:1px solid var(--line);background:var(--card);color:var(--ink);padding:8px 14px;border-radius:8px;font:inherit;font-weight:600;cursor:pointer}
+.btn:hover{border-color:var(--pri)}.btn.pri{background:var(--pri);color:#fff;border-color:var(--pri)}
+.btn.pri:disabled{opacity:.45;cursor:not-allowed}.btn.sm{padding:4px 10px;font-size:12px}.btn.del{color:var(--bad)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
+.stat b{display:block;font-size:26px;line-height:1.2}.stat span{color:var(--mut);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;margin-bottom:16px}
+h2{font-size:15px;margin:0 0 4px}.hint{color:var(--mut);font-size:12.5px;margin:0 0 10px}
+.drop{border:2px dashed var(--line);border-radius:10px;padding:22px 12px;text-align:center;cursor:pointer;background:var(--pri2)}
+.drop.over{border-color:var(--pri)}.drop b{color:var(--pri)}
+.pill{display:inline-block;padding:2px 9px;border-radius:99px;font-size:12px;font-weight:600}
+.pill.ok{background:var(--okbg);color:var(--ok)}.pill.warn{background:var(--warnbg);color:var(--warn)}.pill.bad{background:var(--badbg);color:var(--bad)}
+.log{max-height:170px;overflow:auto;margin-top:10px;font-size:13px}.log div{padding:3px 0;border-bottom:1px solid var(--line)}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.tab{padding:7px 14px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer;font:inherit;font-weight:600}
+.tab.on{background:var(--pri);color:#fff;border-color:var(--pri)}
+.tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;margin-bottom:10px}
+input[type=search]{padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);font:inherit;min-width:220px}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{background:var(--pri2);white-space:nowrap;font-weight:700}tr:last-child td{border-bottom:0}
+td.wr{min-width:220px;max-width:320px}td.nw{white-space:nowrap}
+.empty{padding:28px;text-align:center;color:var(--mut)}
+.ov{position:fixed;inset:0;background:rgba(10,14,25,.55);display:none;align-items:center;justify-content:center;padding:16px;z-index:50}
+.ov.show{display:flex}.modal{background:var(--card);color:var(--ink);border-radius:12px;max-width:760px;width:100%;max-height:86vh;overflow:auto;padding:20px;border:1px solid var(--line)}
+.kv{display:grid;grid-template-columns:200px 1fr;gap:4px 12px;font-size:13px;margin:10px 0}.kv i{color:var(--mut);font-style:normal}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:8px;display:none;z-index:60}
+@media(max-width:560px){.kv{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div><h1>Employee Master Data Management</h1><div class="sub">Upload employee information files, keep a permanent record, export the Master Sheet.</div></div>
+  <button class="btn pri" id="exportBtn">⬇ Export Master Sheet (.xlsx)</button>
+</header>
+
+<div class="stats">
+  <div class="card stat"><b id="sEmp">0</b><span>Employees</span></div>
+  <div class="card stat"><b id="sDep">0</b><span>Dependant rows</span></div>
+  <div class="card stat"><b id="sExp">0</b><span>Experience rows</span></div>
+  <div class="card stat"><b id="sTpl" style="font-size:16px;padding-top:8px">…</b><span>Master Sheet template</span></div>
+</div>
+
+<div id="storeWarn" class="card" style="display:none;margin-bottom:12px;background:var(--warnbg);color:var(--warn)">Browser storage is unavailable here, so records will last only until this page is closed.</div>
+
+<div class="grid2">
+  <div class="card">
+    <h2>1. Employee information files</h2>
+    <p class="hint">Filename must be the Emp Code (e.g. 0001.xlsx, 1001.xlsx). Select many files at once. A new code is added; an existing code is replaced with the latest file. Nothing else is touched.</p>
+    <div class="drop" id="drop"><b>Click to choose</b> or drag &amp; drop employee files here<input type="file" id="empFiles" accept=".xlsx,.xls,.xlsm" multiple hidden></div>
+    <div class="log" id="log"></div>
+  </div>
+  <div class="card">
+    <h2>2. Master Sheet template</h2>
+    <p class="hint">Your template is saved here, so you never need to upload it again. Upload a file only when the template changes; the new one then replaces it for all future exports. Sheet names, headings, column order and styling are kept exactly.</p>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button class="btn" id="tplBtn">Replace template (only if changed)</button><input type="file" id="tplFile" accept=".xlsx" hidden>
+      <span id="tplName" class="pill ok"></span>
+    </div>
+    <p class="hint" style="margin-top:14px">Sheets: <b>Active</b>, <b>Dependant Details</b>, <b>Experience</b>. Missing details stay blank; nothing is guessed.</p>
+  </div>
+</div>
+
+<div class="card">
+  <div class="tabs" id="tabs">
+    <button class="tab on" data-t="emp">Uploaded employees</button>
+    <button class="tab" data-t="Active">Active</button>
+    <button class="tab" data-t="Dependant Details">Dependant Details</button>
+    <button class="tab" data-t="Experience">Experience</button>
+  </div>
+  <div class="tools">
+    <input type="search" id="q" placeholder="Search code, name or file…">
+    <div id="bulk"><button class="btn sm del" id="delSel">Delete selected</button> <button class="btn sm del" id="delAll">Delete all</button></div>
+  </div>
+  <div id="view"></div>
+</div>
+</div>
+
+<div class="ov" id="ov"><div class="modal" id="modal"></div></div>
+<div id="toast"></div>
+
+<script>
+const TEMPLATE_B64="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";
+const TEMPLATE_VER="2026-11-20-master-sheet-1";
+//#PURE
+const norm=s=>String(s==null?'':s).toLowerCase().replace(/[’‘`]/g,"'").replace(/\s+/g,' ').trim();
+const lab=s=>norm(s).replace(/:/g,'').trim();
+const pad=n=>String(n).padStart(2,'0');
+const MON={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+function parseDate(s){
+  s=String(s||'').trim().replace(/\s+/g,' ');if(!s)return null;
+  if(/^(present|current|currently|till|till date|to date|date|now|continu|ongoing|working|today)/i.test(s))return{cur:true};
+  let m,y;const fy=v=>{v=+v;return v<100?(v<50?2000+v:1900+v):v};
+  if(m=s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/))return{y:fy(m[3]),m:+m[2]-1,d:+m[1]};
+  if(m=s.match(/^(\d{1,2})[\/\-.](\d{4})$/))return{y:+m[2],m:+m[1]-1,d:null};
+  if(m=s.match(/^(\d{1,2})(?:st|nd|rd|th)?[\s\-.,]+([a-z]{3,9})[\s,\-.']*(\d{2,4})$/i)){const k=MON[m[2].slice(0,3).toLowerCase()];if(k!=null)return{y:fy(m[3]),m:k,d:+m[1]}}
+  if(m=s.match(/^([a-z]{3,9})[\s,\-.']*(\d{2,4})$/i)){const k=MON[m[1].slice(0,3).toLowerCase()];if(k!=null)return{y:fy(m[2]),m:k,d:null}}
+  if(m=s.match(/^(\d{4})$/))return{y:+m[1],m:0,d:null};
+  return null;
+}
+function splitDuration(s){
+  s=String(s||'').trim();if(!s)return null;
+  let p=s.split(/\s+[-–—]\s+|\s*[–—]\s*|\s+to\s+|\s+till\s+|\s+until\s+/i).filter(x=>x.trim());
+  if(p.length<2){const m=s.match(/^(.+?\d{4})\s*-\s*(.+)$/);if(m)p=[m[1],m[2]]}
+  return p.length>=2?[p[0].trim(),p[p.length-1].trim()]:null;
+}
+function tenure(dur,now){
+  const sp=splitDuration(dur);if(!sp)return'';
+  let a=parseDate(sp[0]),b=parseDate(sp[1]);if(!a||a.cur||!b)return'';
+  let cur=false;if(b.cur){const t=now||new Date();b={y:t.getFullYear(),m:t.getMonth(),d:t.getDate()};cur=true}
+  let mo=(b.y-a.y)*12+(b.m-a.m);if(a.d&&b.d&&b.d<a.d)mo--;
+  if(mo<0)return'';
+  const y=Math.floor(mo/12),r=mo%12,out=[];
+  if(y)out.push(y+(y===1?' Year':' Years'));if(r||!y)out.push(r+(r===1?' Month':' Months'));
+  return out.join(' ')+(cur?' (till date)':'');
+}
+function qualRank(t){
+  t=norm(t);if(!t)return 0;
+  if(/ph\.?\s?d|doctorate/.test(t))return 7;
+  if(/post[\s-]*graduat|\bmaster|\bm\.?\s?(com|sc|a|tech|e|ba|ca|phil|ed|arch|pharm|s)\b\.?|\bmba\b|\bmca\b|\bpgdm\b|\bpgdca\b|\bllm\b|\bchartered|\bicwa\b|\bcma\b/.test(t))return 6;
+  if(/under[\s-]*graduat|graduat|bachelor|\bb\.?\s?(com|sc|a|tech|e|ba|ca|pharm|ed|arch|ed|s)\b\.?|\bbba\b|\bbca\b|\bllb\b|\bdegree\b/.test(t))return 5;
+  if(/diploma|\biti\b|polytechnic/.test(t))return 4;
+  if(/12|hsc|higher secondary|intermediate|\bpuc\b|\+2|senior secondary/.test(t))return 3;
+  if(/10|ssc|secondary|matric/.test(t))return 2;
+  return 1;
+}
+function highestQual(rows){
+  let best=null;
+  rows.forEach((r,i)=>{
+    if(!r.title)return;
+    let rk=qualRank(r.title);if(rk<=1)rk=Math.max(rk,qualRank(r.title+' '+r.spec));
+    const ym=(String(r.year).match(/(\d{4})/)||[])[1]||0;
+    const k=[rk,+ym,i];
+    if(!best||k[0]>best.k[0]||(k[0]===best.k[0]&&(k[1]>best.k[1]||(k[1]===best.k[1]&&k[2]>best.k[2]))))best={k,title:r.title};
+  });
+  return best?best.title:'';
+}
+const person=(n,m)=>n?(m?`${n} (${m})`:n):'';
+//#ENDPURE
+
+/* ---------- reading an employee information file ---------- */
+function readGrid(ws){
+  const ref=XLSX.utils.decode_range(ws['!ref']||'A1'),g={};
+  for(const k in ws){
+    if(k[0]==='!')continue;const c=ws[k],a=XLSX.utils.decode_cell(k);let v;
+    if(c.t==='n'){
+      if(c.z&&XLSX.SSF.is_date(c.z)){const p=XLSX.SSF.parse_date_code(c.v);v=pad(p.d)+'/'+pad(p.m)+'/'+p.y}
+      else v=String(c.v);
+    }else if(c.t==='d'){v=pad(c.v.getDate())+'/'+pad(c.v.getMonth()+1)+'/'+c.v.getFullYear()}
+    else v=c.v==null?'':String(c.v);
+    g[a.r+','+a.c]=v.trim();
+  }
+  const merges=ws['!merges']||[];
+  return{maxR:ref.e.r,maxC:ref.e.c,get:(r,c)=>g[r+','+c]||'',
+    mEnd:(r,c)=>{for(const m of merges)if(m.s.r<=r&&r<=m.e.r&&m.s.c<=c&&c<=m.e.c)return m.e.c;return c}};
+}
+function findLabel(G,prefix,fromR=0){
+  const p=lab(prefix);
+  for(let r=fromR;r<=G.maxR;r++)for(let c=0;c<=G.maxC;c++){const t=G.get(r,c);if(t&&lab(t).startsWith(p))return{r,c}}
+  return null;
+}
+function field(G,prefix){const f=findLabel(G,prefix);return f?G.get(f.r,G.mEnd(f.r,f.c)+1):''}
+const SECTION=/^(nominee details|educational qualification|employment history|please specify gaps|family information|have you|do you have|declaration|signature|i hereby)/;
+function table(G,titlePrefix,headFirst,cols){
+  const t=findLabel(G,titlePrefix);if(!t)return[];
+  let h=null;
+  for(let r=t.r+1;r<=Math.min(t.r+4,G.maxR);r++)if(lab(G.get(r,0)).startsWith(headFirst)){h=r;break}
+  if(h==null)return[];
+  const idx={};
+  for(let c=0;c<=G.maxC;c++){const x=lab(G.get(h,c));if(!x)continue;for(const k in cols)if(idx[k]==null&&x.startsWith(cols[k]))idx[k]=c}
+  const rows=[];
+  for(let r=h+1;r<=G.maxR;r++){
+    if(SECTION.test(lab(G.get(r,0))))break;
+    const o={};let any=false;
+    for(const k in idx){o[k]=G.get(r,idx[k]);if(o[k])any=true}
+    o._any=any;rows.push(o);
+  }
+  return rows;
+}
+function parseEmployee(buf,code,fileName){
+  const wb=XLSX.read(buf,{type:'array',cellNF:true});
+  const ws=wb.Sheets['Information Sheet']||wb.Sheets[wb.SheetNames[0]];
+  const G=readGrid(ws);
+  const fam=table(G,'family information','name',{name:'name',rel:'relationship',mob:'contact number'});
+  const sp=fam.find(r=>/^(spouse|wife|husband)/.test(norm(r.rel))&&r.name);
+  const fa=fam.find(r=>/^father(?!.*law)/.test(norm(r.rel))&&r.name);
+  const mo=fam.find(r=>/^mother(?!.*law)/.test(norm(r.rel))&&r.name);
+  const parents=[fa&&person(fa.name,fa.mob),mo&&person(mo.name,mo.mob)].filter(Boolean).join(', ');
+  const edu=table(G,'educational qualification','title of course',{title:'title of course',spec:'specialization',year:'month & year'});
+  const nom=table(G,'nominee details for pf','full name',{full:'full name',rel:'relationship',dob:'dob',aadhar:'aadhar',mobile:'mobile'});
+  const emp=table(G,'employment history','name of company',{company:'name of company',duration:'duration',desig:'designation',sal:'last drawn'});
+  const tf=findLabel(G,'employment history');
+  const total=field(G,'total experience');
+  const A={
+    'emp code':code,'employee name':field(G,'employee name'),'personal number':field(G,'self mobile number'),
+    'date of birth':field(G,'date of birth'),'previous experience':total,'father - husband name':field(G,"father's name"),
+    'gender':field(G,'gender'),'present address':field(G,'current address'),'permanent address':field(G,'permanent address'),
+    'blood group':field(G,'blood group'),'personal email id':field(G,'email id'),'marital status':field(G,'marital status'),
+    'adhar card number':field(G,'aadhar number'),'pan card number':field(G,'pan number'),'account name':field(G,'name as per account'),
+    'bank name':field(G,'bank name'),'branch name':field(G,'branch name'),'account number':field(G,'account number'),
+    'ifsc code':field(G,'ifsc code'),'esi number':field(G,'previous esic number'),'uan no.':field(G,'uan number'),
+    'name & contact details of spouse':sp?person(sp.name,sp.mob):'','contact details of parents (name & mobile no)':parents,
+    'aadhar card address':field(G,'address as per aadhar'),'qualification':highestQual(edu)
+  };
+  return{code,fileName,uploadedAt:new Date().toISOString(),active:A,
+    dependants:nom.filter(r=>r.full||r.dob||r.aadhar||r.mobile).map(r=>({full:r.full,rel:r.rel,dob:r.dob,aadhar:r.aadhar,mobile:r.mobile})),
+    experience:emp.filter(r=>r.company).map(r=>({company:r.company,duration:r.duration,tenure:tenure(r.duration),desig:r.desig,
+      sal:/^\d+(\.\d+)?$/.test(r.sal)?Number(r.sal):r.sal}))};
+}
+
+/* ---------- storage ---------- */
+let mem={},idb=null;
+function openDB(){return new Promise(res=>{try{const q=indexedDB.open('empMasterDash',1);q.onupgradeneeded=()=>q.result.createObjectStore('kv');q.onsuccess=()=>res(q.result);q.onerror=()=>res(null)}catch(e){res(null)}})}
+const kvGet=k=>new Promise(res=>{if(!idb)return res(mem[k]);try{const q=idb.transaction('kv').objectStore('kv').get(k);q.onsuccess=()=>res(q.result);q.onerror=()=>res(undefined)}catch(e){res(mem[k])}});
+const kvSet=(k,v)=>new Promise(res=>{mem[k]=v;if(!idb)return res();try{const t=idb.transaction('kv','readwrite');t.objectStore('kv').put(v,k);t.oncomplete=()=>res();t.onerror=()=>res()}catch(e){res()}});
+
+/* ---------- state ---------- */
+let records={},tpl=null,tab='emp',sel=new Set(),headCache={};
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const key=c=>String(c).replace(/^0+(?=\d)/,'');
+const sorted=()=>Object.values(records).sort((a,b)=>(+a.code)-(+b.code));
+const save=()=>kvSet('records',records);
+function toast(m){const t=$('toast');t.textContent=m;t.style.display='block';clearTimeout(toast.h);toast.h=setTimeout(()=>t.style.display='none',2800)}
+function b64ToBuf(b){const s=atob(b),u=new Uint8Array(s.length);for(let i=0;i<s.length;i++)u[i]=s.charCodeAt(i);return u.buffer}
+function ask(msg,okLabel='Delete'){return new Promise(res=>{
+  $('modal').innerHTML=`<h2>Please confirm</h2><p>${esc(msg)}</p><div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn" id="cn">Cancel</button><button class="btn pri" id="ok">${okLabel}</button></div>`;
+  $('ov').classList.add('show');
+  $('cn').onclick=()=>{$('ov').classList.remove('show');res(false)};$('ok').onclick=()=>{$('ov').classList.remove('show');res(true)};
+})}
+
+/* ---------- template ---------- */
+async function loadTemplateInfo(buf,name){
+  const wb=new ExcelJS.Workbook();await wb.xlsx.load(buf.slice(0));
+  const need=['Active','Dependant Details','Experience'],miss=need.filter(n=>!wb.getWorksheet(n));
+  if(miss.length)throw new Error('Template is missing sheet(s): '+miss.join(', '));
+  headCache={};
+  need.forEach(n=>{const h=[];wb.getWorksheet(n).getRow(1).eachCell({includeEmpty:true},(c,i)=>{h[i]=String(c.value==null?'':(c.value.richText?c.value.richText.map(x=>x.text).join(''):c.value))});headCache[n]=h});
+  tpl={buf,name};
+}
+
+/* ---------- uploads ---------- */
+async function handleFiles(files){
+  const log=$('log');log.innerHTML='';let added=0,upd=0,bad=0;
+  const add=(cls,t)=>log.insertAdjacentHTML('beforeend',`<div><span class="pill ${cls}">${cls==='ok'?'OK':cls==='warn'?'Check':'Rejected'}</span> ${esc(t)}</div>`);
+  for(const f of files){
+    const stem=f.name.replace(/\.[^.]+$/,'').trim(),m=stem.match(/^(\d+)(?:\s*\(\d+\))?$/);
+    if(!/\.(xlsx|xls|xlsm)$/i.test(f.name)){bad++;add('bad',`${f.name}: not an Excel file`);continue}
+    if(!m){bad++;add('bad',`${f.name}: filename must be a numeric Emp Code`);continue}
+    try{
+      const rec=parseEmployee(await f.arrayBuffer(),m[1],f.name),k=key(m[1]),exists=!!records[k];
+      records[k]=rec;exists?upd++:added++;
+      add(rec.active['employee name']?'ok':'warn',`${f.name}: Emp Code ${m[1]} ${exists?'updated':'added'}${rec.active['employee name']?' – '+rec.active['employee name']:' – employee name not found in file'}`);
+    }catch(e){bad++;add('bad',`${f.name}: could not be read (${e.message||e})`)}
+  }
+  await save();render();
+  toast(`${added} added, ${upd} updated${bad?', '+bad+' rejected':''}`);
+}
+
+/* ---------- rendering ---------- */
+function render(){
+  const R=sorted();
+  $('sEmp').textContent=R.length;
+  $('sDep').textContent=R.reduce((n,r)=>n+r.dependants.length,0);
+  $('sExp').textContent=R.reduce((n,r)=>n+r.experience.length,0);
+  $('sTpl').textContent=tpl?'Ready':'Not loaded';
+  $('tplName').textContent=tpl?tpl.name:'none';
+  document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.t===tab));
+  $('bulk').style.display=tab==='emp'&&R.length?'':'none';
+  $('delSel').disabled=!sel.size;
+  const q=norm($('q').value);
+  const F=R.filter(r=>!q||norm(r.code+' '+r.active['employee name']+' '+r.fileName).includes(q));
+  let h='';
+  if(!R.length)h='<div class="empty">No employee records yet. Upload employee information files to begin.</div>';
+  else if(tab==='emp'){
+    h=`<div class="tw"><table><thead><tr><th><input type="checkbox" id="all"></th><th>Emp Code</th><th>Employee Name</th><th>Source file</th><th>Dependants</th><th>Experience</th><th>Last uploaded</th><th></th></tr></thead><tbody>`+
+    F.map(r=>`<tr><td><input type="checkbox" class="ck" data-k="${key(r.code)}" ${sel.has(key(r.code))?'checked':''}></td><td class="nw"><b>${esc(r.code)}</b></td><td>${esc(r.active['employee name'])}</td><td class="nw">${esc(r.fileName)}</td><td>${r.dependants.length}</td><td>${r.experience.length}</td><td class="nw">${new Date(r.uploadedAt).toLocaleString()}</td><td class="nw"><button class="btn sm" data-v="${key(r.code)}">View</button> <button class="btn sm del" data-d="${key(r.code)}">Delete</button></td></tr>`).join('')+`</tbody></table></div>`;
+    if(!F.length)h='<div class="empty">No matching employees.</div>';
+  }else{
+    let cols=[],rows=[];
+    if(tab==='Active'){
+      const hd=(headCache.Active||[]).map((x,i)=>[x,i]).filter(x=>x[0]);
+      const rr=F.map(r=>hd.map(([x])=>x==='Sr. No'?'':(r.active[norm(x)]||'')));
+      hd.forEach(([x],j)=>{if(x!=='Sr. No'&&rr.some(row=>row[j]))cols.push(j)});
+      rows=F.map((r,i)=>[hd,rr[i]]);
+      h=tbl(cols.map(j=>hd[j][0]),rr.map(row=>cols.map(j=>row[j])));
+    }else if(tab==='Dependant Details'){
+      const L=[];F.forEach(r=>r.dependants.forEach(d=>L.push([r.code,r.active['employee name'],d.full,d.rel,d.dob,d.aadhar,d.mobile])));
+      h=L.length?tbl(['Emp Code','Employee Name','Full Name','Relationship','DOB (DD/MM/YYYY)','Aadhar Card number','Mobile Number'],L):'<div class="empty">No dependant rows.</div>';
+    }else{
+      const L=[];F.forEach(r=>r.experience.forEach(x=>L.push([r.code,r.active['employee name'],x.company,x.duration,x.tenure,x.desig,x.sal])));
+      h=L.length?tbl(['Emp Code','Employee Name','Name of company','Duration (From – To)','Tenure','Designation','Last drawn Salary (Monthly gross)'],L):'<div class="empty">No experience rows.</div>';
+    }
+  }
+  $('view').innerHTML=h;
+}
+function tbl(cols,rows){
+  if(!rows.length||!cols.length)return'<div class="empty">Nothing to show.</div>';
+  return`<div class="tw"><table><thead><tr>${cols.map(c=>`<th>${esc(c.trim())}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(v=>`<td class="${String(v).length>40?'wr':'nw'}">${esc(v)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+}
+function showEmp(k){
+  const r=records[k];if(!r)return;
+  const rows=Object.entries(r.active).filter(([,v])=>v).map(([a,v])=>`<i>${esc(a)}</i><span>${esc(v)}</span>`).join('');
+  $('modal').innerHTML=`<h2>${esc(r.active['employee name']||'Emp Code '+r.code)} <span class="pill ok">${esc(r.code)}</span></h2><div class="kv">${rows}</div>
+  <h2>Dependants</h2>${r.dependants.length?tbl(['Full Name','Relationship','DOB','Aadhar','Mobile'],r.dependants.map(d=>[d.full,d.rel,d.dob,d.aadhar,d.mobile])):'<p class="hint">None recorded.</p>'}
+  <h2 style="margin-top:14px">Experience</h2>${r.experience.length?tbl(['Company','Duration','Tenure','Designation','Salary'],r.experience.map(x=>[x.company,x.duration,x.tenure,x.desig,x.sal])):'<p class="hint">None recorded.</p>'}
+  <div style="text-align:right;margin-top:14px"><button class="btn" id="cl">Close</button></div>`;
+  $('ov').classList.add('show');$('cl').onclick=()=>$('ov').classList.remove('show');
+}
+async function removeKeys(ks,msg){
+  if(!ks.length||!(await ask(msg)))return;
+  ks.forEach(k=>{delete records[k];sel.delete(k)});await save();render();toast(ks.length+' record(s) deleted');
+}
+
+/* ---------- export ---------- */
+const CENTER=new Set(['sr. no','emp code','date of birth','dob (dd/mm/yyyy)','gender','blood group','marital status','personal number','mobile number','adhar card number','aadhar card number','pan card number','account number','ifsc code','esi number','uan no.','relationship','tenure']);
+async function exportXlsx(){
+  if(!tpl)return toast('Load a Master Sheet template first');
+  if(!records||!Object.keys(records).length)return toast('No employee records to export');
+  const btn=$('exportBtn');btn.disabled=true;
+  try{
+    const wb=new ExcelJS.Workbook();await wb.xlsx.load(tpl.buf.slice(0));
+    const R=sorted();
+    const dataFor={
+      'Active':R.map(r=>norm2=>r.active[norm2]||''),
+      'Dependant Details':[],'Experience':[]
+    };
+    const sheets={
+      'Active':R.map(r=>h=>r.active[h]===undefined?'':r.active[h]),
+      'Dependant Details':R.flatMap(r=>r.dependants.map(d=>h=>({'emp code':r.code,'employee name':r.active['employee name'],'full name':d.full,'relationship':d.rel,'dob (dd/mm/yyyy)':d.dob,'aadhar card number':d.aadhar,'mobile number':d.mobile}[h]||''))),
+      'Experience':R.flatMap(r=>r.experience.map(x=>h=>{
+        if(h==='emp code')return r.code;if(h==='employee name')return r.active['employee name'];
+        if(h==='name of company')return x.company;if(h.startsWith('duration'))return x.duration;
+        if(h==='tenure')return x.tenure;if(h==='designation')return x.desig;if(h.startsWith('last drawn'))return x.sal;return''}))
+    };
+    for(const name of Object.keys(sheets)){
+      const ws=wb.getWorksheet(name),heads=[];
+      ws.getRow(1).eachCell({includeEmpty:true},(c,i)=>{heads[i]=norm(c.value&&c.value.richText?c.value.richText.map(x=>x.text).join(''):c.value)});
+      const n=heads.length-1,base=[];
+      for(let c=1;c<=n;c++)base[c]=JSON.parse(JSON.stringify(ws.getRow(2).getCell(c).style||{}));
+      const lines=[];for(let c=1;c<=n;c++)lines[c]=0;
+      const list=sheets[name];
+      const total=Math.max(list.length,1);
+      for(let i=0;i<total;i++){
+        const row=ws.getRow(i+2),fn=list[i];
+        for(let c=1;c<=n;c++){
+          const cell=row.getCell(c),h=heads[c];
+          let v=h==='sr. no'?(fn?i+1:null):(fn?fn(h):'');
+          if(v===''||v===undefined)v=null;
+          cell.value=v;cell.style=JSON.parse(JSON.stringify(base[c]));
+          cell.alignment={vertical:'middle',horizontal:CENTER.has(h)?'center':'left',wrapText:true};
+          if(v!=null)lines[c]=Math.max(lines[c],Math.min(String(v).length,70));
+        }
+        row.commit&&row.commit();
+      }
+      for(let c=1;c<=n;c++){
+        const hl=(heads[c]||'').length,w=ws.getColumn(c).width||8;
+        let width=Math.max(w,hl+4,lines[c]?Math.min(lines[c]+3,55):0);
+        ws.getColumn(c).width=Math.round(width*10)/10;
+      }
+      const hr=ws.getRow(1);hr.alignment={vertical:'middle',horizontal:'center',wrapText:true};
+      if(!hr.height||hr.height<20)hr.height=30;
+      ws.views=[{state:'frozen',xSplit:name==='Active'?3:2,ySplit:1,topLeftCell:name==='Active'?'D2':'C2'}];
+      ws.autoFilter={from:{row:1,column:1},to:{row:1,column:n}};
+    }
+    const buf=await wb.xlsx.writeBuffer();
+    const a=document.createElement('a'),d=new Date();
+    a.href=URL.createObjectURL(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+    a.download=`Employee_Master_Sheet_${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}.xlsx`;
+    document.body.appendChild(a);a.click();a.remove();toast('Export ready');
+  }catch(e){toast('Export failed: '+(e.message||e))}
+  btn.disabled=false;
+}
+
+/* ---------- wiring ---------- */
+const drop=$('drop'),inp=$('empFiles');
+drop.onclick=()=>inp.click();
+inp.onchange=()=>{if(inp.files.length)handleFiles([...inp.files]);inp.value=''};
+['dragover','dragenter'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add('over')}));
+['dragleave','drop'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove('over')}));
+drop.addEventListener('drop',ev=>{if(ev.dataTransfer.files.length)handleFiles([...ev.dataTransfer.files])});
+$('tplBtn').onclick=()=>$('tplFile').click();
+$('tplFile').onchange=async e=>{
+  const f=e.target.files[0];e.target.value='';if(!f)return;
+  try{const buf=await f.arrayBuffer();await loadTemplateInfo(buf,f.name);await kvSet('template',{buf,name:f.name+' (saved)',ver:TEMPLATE_VER});tpl.name=f.name+' (saved)';toast('New template saved – it will be used for every export');render()}
+  catch(err){toast(err.message||'Could not read template')}
+};
+$('exportBtn').onclick=exportXlsx;
+$('q').oninput=render;
+$('tabs').onclick=e=>{const b=e.target.closest('.tab');if(b){tab=b.dataset.t;render()}};
+$('view').onclick=e=>{
+  const v=e.target.closest('[data-v]'),d=e.target.closest('[data-d]');
+  if(v)showEmp(v.dataset.v);
+  if(d){const r=records[d.dataset.d];removeKeys([d.dataset.d],`Delete the record for Emp Code ${r.code}${r.active['employee name']?' ('+r.active['employee name']+')':''}? Its Active, Dependant and Experience rows will be removed.`)}
+};
+$('view').onchange=e=>{
+  if(e.target.id==='all'){document.querySelectorAll('.ck').forEach(c=>{c.checked=e.target.checked;e.target.checked?sel.add(c.dataset.k):sel.delete(c.dataset.k)})}
+  else if(e.target.classList.contains('ck')){e.target.checked?sel.add(e.target.dataset.k):sel.delete(e.target.dataset.k)}
+  $('delSel').disabled=!sel.size;
+};
+$('delSel').onclick=()=>removeKeys([...sel],`Delete ${sel.size} selected employee record(s)?`);
+$('delAll').onclick=()=>removeKeys(Object.keys(records),`Delete ALL ${Object.keys(records).length} employee records? This cannot be undone.`);
+$('ov').onclick=e=>{if(e.target.id==='ov')$('ov').classList.remove('show')};
+
+(async()=>{
+  idb=await openDB();if(!idb)$('storeWarn').style.display='block';
+  records=(await kvGet('records'))||{};
+  try{
+    const t=await kvGet('template');
+    if(t&&t.buf&&t.ver===TEMPLATE_VER)await loadTemplateInfo(t.buf,t.name);else await loadTemplateInfo(b64ToBuf(TEMPLATE_B64),'Master_Sheet_1.xlsx (saved)');
+  }catch(e){try{await loadTemplateInfo(b64ToBuf(TEMPLATE_B64),'Master_Sheet_1.xlsx (saved)')}catch(_){}}
+  render();
+})();
+</script>
+</body>
+</html>
