@@ -191,7 +191,12 @@ function cfbRead(buf){
   }
   const root=ents[0],miniFat=mfStart<FREE?u32s(readChain(mfStart)):[];
   let ministream=null;
-  return{find:name=>{
+  return{patch:(name,data)=>{
+    const e=ents.find(x=>x.type===2&&x.name===name);if(!e||e.size<cutoff)throw new Error('cannot patch stream');
+    const out=b.slice();let p=0;
+    for(const i of chain(e.start,fat)){const n=Math.min(ss,data.length-p);if(n<=0)break;out.set(data.subarray(p,p+n),(i+1)*ss);p+=n}
+    return out;
+  },find:name=>{
     const e=ents.find(x=>x.type===2&&x.name===name);if(!e)return null;
     if(e.size<cutoff){
       if(!ministream)ministream=readChain(root.start);
@@ -248,15 +253,106 @@ async function stdDecrypt(info,pkg,password){
   if(!same(await hashB('SHA1',ver),vh,hSize))throw BAD();
   return(await aesEcb(key,pkg.subarray(8))).subarray(0,rd32(pkg,0));
 }
+function md5(msg){
+  const S=[7,12,17,22,7,12,17,22,7,12,17,22,7,12,17,22,5,9,14,20,5,9,14,20,5,9,14,20,5,9,14,20,4,11,16,23,4,11,16,23,4,11,16,23,4,11,16,23,6,10,15,21,6,10,15,21,6,10,15,21,6,10,15,21],K=[];
+  for(let i=0;i<64;i++)K[i]=Math.floor(Math.abs(Math.sin(i+1))*4294967296)|0;
+  const n=msg.length,len=((n+8>>6)+1)<<6,b=new Uint8Array(len);b.set(msg);b[n]=0x80;
+  const dv=new DataView(b.buffer);dv.setUint32(len-8,(n*8)>>>0,true);dv.setUint32(len-4,Math.floor(n/536870912),true);
+  let a0=0x67452301|0,b0=0xefcdab89|0,c0=0x98badcfe|0,d0=0x10325476|0;
+  for(let o=0;o<len;o+=64){
+    const M=[];for(let i=0;i<16;i++)M[i]=dv.getInt32(o+4*i,true);
+    let A=a0,B=b0,C=c0,D=d0;
+    for(let i=0;i<64;i++){
+      let F,g;
+      if(i<16){F=(B&C)|(~B&D);g=i}else if(i<32){F=(D&B)|(~D&C);g=(5*i+1)%16}else if(i<48){F=B^C^D;g=(3*i+5)%16}else{F=C^(B|~D);g=(7*i)%16}
+      F=(F+A+K[i]+M[g])|0;A=D;D=C;C=B;B=(B+((F<<S[i])|(F>>>(32-S[i]))))|0;
+    }
+    a0=(a0+A)|0;b0=(b0+B)|0;c0=(c0+C)|0;d0=(d0+D)|0;
+  }
+  const out=new Uint8Array(16),od=new DataView(out.buffer);od.setInt32(0,a0,true);od.setInt32(4,b0,true);od.setInt32(8,c0,true);od.setInt32(12,d0,true);return out;
+}
+function sha1(msg){
+  const n=msg.length,len=((n+8>>6)+1)<<6,b=new Uint8Array(len);b.set(msg);b[n]=0x80;
+  const dv=new DataView(b.buffer);dv.setUint32(len-4,(n*8)>>>0);dv.setUint32(len-8,Math.floor(n/536870912));
+  let h0=0x67452301|0,h1=0xEFCDAB89|0,h2=0x98BADCFE|0,h3=0x10325476|0,h4=0xC3D2E1F0|0;
+  const w=new Int32Array(80);
+  for(let o=0;o<len;o+=64){
+    for(let i=0;i<16;i++)w[i]=dv.getInt32(o+4*i);
+    for(let i=16;i<80;i++){const x=w[i-3]^w[i-8]^w[i-14]^w[i-16];w[i]=(x<<1)|(x>>>31)}
+    let a=h0,bb=h1,c=h2,d=h3,e=h4;
+    for(let i=0;i<80;i++){
+      let f,k;
+      if(i<20){f=(bb&c)|(~bb&d);k=0x5A827999}else if(i<40){f=bb^c^d;k=0x6ED9EBA1}else if(i<60){f=(bb&c)|(bb&d)|(c&d);k=0x8F1BBCDC|0}else{f=bb^c^d;k=0xCA62C1D6|0}
+      const t=(((a<<5)|(a>>>27))+f+e+k+w[i])|0;e=d;d=c;c=(bb<<30)|(bb>>>2);bb=a;a=t;
+    }
+    h0=(h0+a)|0;h1=(h1+bb)|0;h2=(h2+c)|0;h3=(h3+d)|0;h4=(h4+e)|0;
+  }
+  const out=new Uint8Array(20),od=new DataView(out.buffer);[h0,h1,h2,h3,h4].forEach((v,i)=>od.setInt32(4*i,v));return out;
+}
+function rc4ks(key,n){
+  const s=new Uint8Array(256);for(let i=0;i<256;i++)s[i]=i;
+  for(let i=0,j=0;i<256;i++){j=(j+s[i]+key[i%key.length])&255;const t=s[i];s[i]=s[j];s[j]=t}
+  const o=new Uint8Array(n);
+  for(let k=0,i=0,j=0;k<n;k++){i=(i+1)&255;j=(j+s[i])&255;const t=s[i];s[i]=s[j];s[j]=t;o[k]=s[(s[i]+s[j])&255]}
+  return o;
+}
+const xorB=(a,b)=>{const o=new Uint8Array(a.length);for(let i=0;i<a.length;i++)o[i]=a[i]^b[i];return o};
+function biffKeys(fp,pw){
+  const pwb=pwBytes(pw),major=fp[2]|(fp[3]<<8),minor=fp[4]|(fp[5]<<8);
+  if(major===1&&minor===1){
+    const salt=fp.subarray(6,22),ev=fp.subarray(22,38),evh=fp.subarray(38,54),h0=md5(pwb).subarray(0,5),rep=new Uint8Array(336);
+    for(let i=0;i<16;i++){rep.set(h0,i*21);rep.set(salt,i*21+5)}
+    const h1=md5(rep).subarray(0,5),keyFor=blk=>md5(cat(h1,le32(blk))),ks=rc4ks(keyFor(0),32);
+    if(!same(md5(xorB(ev,ks.subarray(0,16))),xorB(evh,ks.subarray(16,32)),16))throw BAD();
+    return keyFor;
+  }
+  if(major>=2&&major<=4&&minor===2){
+    const hs=rd32(fp,10),hdr=fp.subarray(14,14+hs),algID=rd32(hdr,8),keyBits=rd32(hdr,16),v=14+hs,sz=rd32(fp,v);
+    if(algID!==0x6801)throw new Error('BIFF encryption algorithm 0x'+algID.toString(16)+' is not supported');
+    const salt=fp.subarray(v+4,v+4+sz),ev=fp.subarray(v+4+sz,v+20+sz),vhs=rd32(fp,v+20+sz),evh=fp.subarray(v+24+sz,v+24+sz+vhs),h0=sha1(cat(salt,pwb));
+    const kn=(keyBits||40)/8,keyFor=blk=>{const k=sha1(cat(h0,le32(blk)));if(kn>=16)return k.subarray(0,kn);const o=new Uint8Array(16);o.set(k.subarray(0,kn));return o};
+    const ks=rc4ks(keyFor(0),16+vhs);
+    if(!same(sha1(xorB(ev,ks.subarray(0,16))),xorB(evh,ks.subarray(16,16+vhs)),20))throw BAD();
+    return keyFor;
+  }
+  throw new Error('BIFF encryption v'+major+'.'+minor+' is not supported');
+}
+const BIFF_PLAIN=new Set([0x809,0x2F,0x194,0x195,0xE1,0x196,0x138]);
+function biffDecrypt(w,keyFor){
+  const out=w.slice();let blk=-1,ks=null;
+  const dec=(from,to)=>{for(let p=from;p<to;p++){const b=p>>10;if(b!==blk){blk=b;ks=rc4ks(keyFor(b),1024)}out[p]=w[p]^ks[p&1023]}};
+  let o=0;
+  while(o+4<=w.length){
+    const id=w[o]|(w[o+1]<<8),len=w[o+2]|(w[o+3]<<8),s=o+4,e=Math.min(s+len,w.length);
+    if(id===0x2F){out[o]=0x77;out[o+1]=0x77}
+    else if(!BIFF_PLAIN.has(id))dec(id===0x85?Math.min(s+4,e):s,e);
+    o=e;
+  }
+  return out;
+}
 let PW_ORDER=['VelvetSweatshop',''];
 async function maybeDecrypt(buf){
   const b=u8(buf);
   if(!(b[0]===0xD0&&b[1]===0xCF&&b[2]===0x11&&b[3]===0xE0))return buf;
   let c;try{c=cfbRead(b)}catch(e){return buf}
   const info=c.find('EncryptionInfo'),pkg=c.find('EncryptedPackage');
-  if(!info||!pkg)return buf;
+  if(!info||!pkg){
+    const nm=c.find('Workbook')?'Workbook':(c.find('Book')?'Book':null),wb=nm&&c.find(nm);
+    if(!wb||wb.length<30)return buf;
+    const o=4+(wb[2]|(wb[3]<<8));
+    if(o+4>wb.length||(wb[o]|(wb[o+1]<<8))!==0x2F)return buf;
+    const fp=wb.subarray(o+4,o+4+(wb[o+2]|(wb[o+3]<<8)));
+    for(const pw of PW_ORDER){
+      try{
+        const dec=biffDecrypt(wb,biffKeys(fp,pw));
+        PW_ORDER=[pw].concat(PW_ORDER.filter(x=>x!==pw));
+        const r=c.patch(nm,dec);return r.buffer.slice(r.byteOffset,r.byteOffset+r.byteLength);
+      }catch(e){if(!e.bad)throw e}
+    }
+    throw new Error('this old .xls is locked with a real password. Open it in Excel, remove the password, save, then upload again');
+  }
   const major=info[0]|(info[1]<<8),minor=info[2]|(info[3]<<8);
-  if(!(minor===4&&major===4)&&minor!==2)throw new Error('encryption v'+major+'.'+minor+' is not supported');
+  if(!(minor===4&&major===4)&&minor!==2)throw new Error('unsupported encryption type');
   for(const pw of PW_ORDER){
     try{
       const o=minor===4?await agileDecrypt(info,pkg,pw):await stdDecrypt(info,pkg,pw);
@@ -340,7 +436,7 @@ function parseEmployee(buf,code,fileName){
   return{code,fileName,uploadedAt:new Date().toISOString(),active:A,
     dependants:nom.filter(r=>r.full||r.dob||r.aadhar||r.mobile).map(r=>({full:r.full,rel:r.rel,dob:r.dob,aadhar:r.aadhar,mobile:r.mobile})),
     experience:emp.filter(r=>r.company).map(r=>({company:r.company,duration:r.duration,tenure:tenure(r.duration),desig:r.desig,
-      sal:/^\d+(\.\d+)?$/.test(r.sal)?Number(r.sal):r.sal}))};
+      sal:(/^(?:rs\.?|inr|₹)?[\s\-.:]*(\d[\d,]*(?:\.\d+)?)\s*(?:\/-|only)?$/i.exec(r.sal)||[])[1]?Number(/^(?:rs\.?|inr|₹)?[\s\-.:]*(\d[\d,]*(?:\.\d+)?)/i.exec(r.sal)[1].replace(/,/g,'')):r.sal}))};
 }
 
 /* ---------- storage ---------- */
@@ -396,7 +492,7 @@ async function handleFiles(files){
   const log=$('log');log.innerHTML='';let added=0,upd=0,bad=0;
   const add=(cls,t)=>log.insertAdjacentHTML('beforeend',`<div><span class="pill ${cls}">${cls==='ok'?'OK':cls==='warn'?'Check':'Rejected'}</span> ${esc(t)}</div>`);
   for(const f of files){
-    const stem=f.name.replace(/\.[^.]+$/,'').trim(),m=stem.match(/^(\d+)(?:\s*\(\d+\))?$/);
+    const stem=f.name.replace(/\.[^.]+$/,'').trim(),m=stem.match(/^[\s_\-]*(\d+)[\s_\-]*(?:\(\d+\))?[\s_\-]*$/);
     if(!/\.(xlsx|xls|xlsm)$/i.test(f.name)){bad++;add('bad',`${f.name}: not an Excel file`);continue}
     if(!m){bad++;add('bad',`${f.name}: filename must be a numeric Emp Code`);continue}
     try{

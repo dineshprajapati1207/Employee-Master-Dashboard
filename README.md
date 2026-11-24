@@ -2,7 +2,7 @@
 
 Static web app (single `index.html`, no build step).
 
-- Upload many employee info files (.xls or .xlsx) at once (filename = Emp Code, e.g. `0001.xlsx`, `1001.xls`)
+- Upload many employee info files (.xls or .xlsx, including files Excel locks with its default password) at once (filename = Emp Code, e.g. `0001.xlsx`, `1001.xls`)
 - New code = added; existing code = replaced; no duplicates; per-file delete
 - Master Sheet template is built in (`template/Master_Sheet.xlsx` is a reference copy)
 - Export all data to Excel in the Master Sheet format
