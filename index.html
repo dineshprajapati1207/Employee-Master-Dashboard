@@ -159,6 +159,115 @@ function highestQual(rows){
 const person=(n,m)=>n?(m?`${n} (${m})`:n):'';
 //#ENDPURE
 
+//#CRYPT
+/* ---------- decrypting Office-encrypted .xlsx (default / empty password) ---------- */
+const u8=b=>b instanceof Uint8Array?b:new Uint8Array(b);
+function cat(...a){return catArr(a)}
+function catArr(a){let n=0;for(const x of a)n+=x.length;const o=new Uint8Array(n);let p=0;for(const x of a){o.set(x,p);p+=x.length}return o}
+const le32=n=>new Uint8Array([n&255,(n>>>8)&255,(n>>>16)&255,(n>>>24)&255]);
+const rd32=(b,o)=>((b[o]|(b[o+1]<<8)|(b[o+2]<<16)|(b[o+3]<<24))>>>0);
+const pwBytes=p=>{const o=new Uint8Array(p.length*2);for(let i=0;i<p.length;i++){const c=p.charCodeAt(i);o[2*i]=c&255;o[2*i+1]=c>>8}return o};
+const SUB=()=>globalThis.crypto.subtle;
+const HASHN={SHA1:'SHA-1','SHA-1':'SHA-1',SHA256:'SHA-256',SHA384:'SHA-384',SHA512:'SHA-512'};
+const hashB=async(alg,d)=>new Uint8Array(await SUB().digest(HASHN[alg],d));
+const fromB64=s=>{const t=atob(s),o=new Uint8Array(t.length);for(let i=0;i<t.length;i++)o[i]=t.charCodeAt(i);return o};
+const same=(a,b,n)=>{for(let i=0;i<n;i++)if(a[i]!==b[i])return false;return true};
+function cfbRead(buf){
+  const b=u8(buf),dv=new DataView(b.buffer,b.byteOffset,b.byteLength);
+  const ss=1<<dv.getUint16(30,true),mss=1<<dv.getUint16(32,true),FREE=0xFFFFFFFA;
+  const dirStart=dv.getUint32(48,true),cutoff=dv.getUint32(56,true),mfStart=dv.getUint32(60,true),difStart=dv.getUint32(68,true),nDif=dv.getUint32(72,true);
+  const sec=i=>b.subarray((i+1)*ss,(i+2)*ss);
+  const fatSecs=[];for(let i=0;i<109;i++){const v=dv.getUint32(76+4*i,true);if(v<FREE)fatSecs.push(v)}
+  let d=difStart;for(let k=0;k<nDif&&d<FREE;k++){const s=sec(d),sd=new DataView(s.buffer,s.byteOffset,s.byteLength);for(let i=0;i<ss/4-1;i++){const v=sd.getUint32(4*i,true);if(v<FREE)fatSecs.push(v)}d=sd.getUint32(ss-4,true)}
+  const u32s=bytes=>{const x=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength),r=[];for(let i=0;i+4<=bytes.length;i+=4)r.push(x.getUint32(i,true));return r};
+  const fat=[].concat(...fatSecs.map(s=>u32s(sec(s))));
+  const chain=(start,t)=>{const r=[];let s=start,g=0;while(s<FREE&&g++<2e6){r.push(s);s=t[s]}return r};
+  const readChain=s=>catArr(chain(s,fat).map(sec));
+  const dir=readChain(dirStart),ents=[];
+  for(let o=0;o+128<=dir.length;o+=128){
+    const dd=new DataView(dir.buffer,dir.byteOffset+o,128),nl=dd.getUint16(64,true);let nm='';
+    for(let i=0;i<nl/2-1;i++)nm+=String.fromCharCode(dd.getUint16(2*i,true));
+    ents.push({name:nm,type:dir[o+66],start:dd.getUint32(116,true),size:dd.getUint32(120,true)});
+  }
+  const root=ents[0],miniFat=mfStart<FREE?u32s(readChain(mfStart)):[];
+  let ministream=null;
+  return{find:name=>{
+    const e=ents.find(x=>x.type===2&&x.name===name);if(!e)return null;
+    if(e.size<cutoff){
+      if(!ministream)ministream=readChain(root.start);
+      return catArr(chain(e.start,miniFat).map(i=>ministream.subarray(i*mss,(i+1)*mss))).subarray(0,e.size);
+    }
+    return readChain(e.start).subarray(0,e.size);
+  }};
+}
+async function aesCbcNoPad(key,iv,ct){
+  const k=await SUB().importKey('raw',key,'AES-CBC',false,['encrypt','decrypt']);
+  const pad=new Uint8Array(await SUB().encrypt({name:'AES-CBC',iv:ct.subarray(ct.length-16)},k,new Uint8Array(0)));
+  return new Uint8Array(await SUB().decrypt({name:'AES-CBC',iv},k,catArr([ct,pad])));
+}
+async function aesEcb(key,ct){
+  const n=ct.length-(ct.length%16);ct=ct.subarray(0,n);
+  const p=await aesCbcNoPad(key,new Uint8Array(16),ct);
+  for(let i=16;i<n;i++)p[i]^=ct[i-16];
+  return p;
+}
+const BAD=()=>{const e=new Error('wrong password');e.bad=true;return e};
+function xmlAttrs(xml,tag){
+  const m=xml.match(new RegExp('<(?:\\w+:)?'+tag+'\\b([^>]*)>'));if(!m)throw new Error('unsupported encryption descriptor');
+  const o={};m[1].replace(/([\w:]+)="([^"]*)"/g,(_,k,v)=>{o[k.replace(/^\w+:/,'')]=v});return o;
+}
+async function agileDecrypt(info,pkg,password){
+  const xml=new TextDecoder().decode(info.subarray(8)),kd=xmlAttrs(xml,'keyData'),ek=xmlAttrs(xml,'encryptedKey');
+  const salt=fromB64(ek.saltValue),alg=ek.hashAlgorithm,kb=+ek.keyBits/8,spin=+ek.spinCount;
+  let h=await hashB(alg,cat(salt,pwBytes(password)));
+  for(let i=0;i<spin;i++)h=await hashB(alg,cat(le32(i),h));
+  const mk=async bk=>{const x=await hashB(alg,cat(h,bk)),o=new Uint8Array(kb).fill(0x36);o.set(x.subarray(0,Math.min(kb,x.length)));return o};
+  const iv=new Uint8Array(16).fill(0x36);iv.set(salt.subarray(0,16));
+  const B1=Uint8Array.of(0xfe,0xa7,0xd2,0x76,0x3b,0x4b,0x9e,0x79),B2=Uint8Array.of(0xd7,0xaa,0x0f,0x6d,0x30,0x61,0x34,0x4e),B3=Uint8Array.of(0x14,0x6e,0x0b,0xe7,0xab,0xac,0xd0,0xd6);
+  const vin=(await aesCbcNoPad(await mk(B1),iv,fromB64(ek.encryptedVerifierHashInput))).subarray(0,+ek.saltSize);
+  const vh=await hashB(alg,vin),vv=await aesCbcNoPad(await mk(B2),iv,fromB64(ek.encryptedVerifierHashValue));
+  if(!same(vh,vv,+ek.hashSize))throw BAD();
+  const secret=(await aesCbcNoPad(await mk(B3),iv,fromB64(ek.encryptedKeyValue))).subarray(0,kb);
+  const size=rd32(pkg,0),data=pkg.subarray(8),kSalt=fromB64(kd.saltValue),out=[];
+  for(let i=0,p=0;p<data.length;i++,p+=4096){
+    let seg=data.subarray(p,Math.min(p+4096,data.length));seg=seg.subarray(0,seg.length-(seg.length%16));
+    const siv=(await hashB(kd.hashAlgorithm,cat(kSalt,le32(i)))).subarray(0,16);
+    out.push(await aesCbcNoPad(secret,siv,seg));
+  }
+  return catArr(out).subarray(0,size);
+}
+async function stdDecrypt(info,pkg,password){
+  const hs=rd32(info,8),keyBits=rd32(info,12+16),v=12+hs,saltSize=rd32(info,v),salt=info.subarray(v+4,v+4+saltSize);
+  const encV=info.subarray(v+4+saltSize,v+4+saltSize+16),hSize=rd32(info,v+4+saltSize+16),encVH=info.subarray(v+4+saltSize+20,v+4+saltSize+52);
+  let h=await hashB('SHA1',cat(salt,pwBytes(password)));
+  for(let i=0;i<50000;i++)h=await hashB('SHA1',cat(le32(i),h));
+  const hf=await hashB('SHA1',cat(h,le32(0)));
+  const xx=c=>{const b=new Uint8Array(64).fill(c);for(let i=0;i<20;i++)b[i]^=hf[i];return hashB('SHA1',b)};
+  const key=cat(await xx(0x36),await xx(0x5c)).subarray(0,(keyBits||128)/8);
+  const ver=await aesEcb(key,encV),vh=await aesEcb(key,encVH);
+  if(!same(await hashB('SHA1',ver),vh,hSize))throw BAD();
+  return(await aesEcb(key,pkg.subarray(8))).subarray(0,rd32(pkg,0));
+}
+let PW_ORDER=['VelvetSweatshop',''];
+async function maybeDecrypt(buf){
+  const b=u8(buf);
+  if(!(b[0]===0xD0&&b[1]===0xCF&&b[2]===0x11&&b[3]===0xE0))return buf;
+  let c;try{c=cfbRead(b)}catch(e){return buf}
+  const info=c.find('EncryptionInfo'),pkg=c.find('EncryptedPackage');
+  if(!info||!pkg)return buf;
+  const major=info[0]|(info[1]<<8),minor=info[2]|(info[3]<<8);
+  if(!(minor===4&&major===4)&&minor!==2)throw new Error('unsupported encryption type');
+  for(const pw of PW_ORDER){
+    try{
+      const o=minor===4?await agileDecrypt(info,pkg,pw):await stdDecrypt(info,pkg,pw);
+      PW_ORDER=[pw].concat(PW_ORDER.filter(x=>x!==pw));
+      return o.buffer.slice(o.byteOffset,o.byteOffset+o.byteLength);
+    }catch(e){if(!e.bad)throw e}
+  }
+  throw new Error('this file is locked with a real password. Open it in Excel, remove the password (File > Info > Protect Workbook), save, then upload again');
+}
+//#ENDCRYPT
+
 /* ---------- reading an employee information file ---------- */
 function readGrid(ws){
   const ref=XLSX.utils.decode_range(ws['!ref']||'A1'),g={};
@@ -269,10 +378,10 @@ async function handleFiles(files){
     if(!/\.(xlsx|xls|xlsm)$/i.test(f.name)){bad++;add('bad',`${f.name}: not an Excel file`);continue}
     if(!m){bad++;add('bad',`${f.name}: filename must be a numeric Emp Code`);continue}
     try{
-      const rec=parseEmployee(await f.arrayBuffer(),m[1],f.name),k=key(m[1]),exists=!!records[k];
+      const rec=parseEmployee(await maybeDecrypt(await f.arrayBuffer()),m[1],f.name),k=key(m[1]),exists=!!records[k];
       records[k]=rec;exists?upd++:added++;
       add(rec.active['employee name']?'ok':'warn',`${f.name}: Emp Code ${m[1]} ${exists?'updated':'added'}${rec.active['employee name']?' – '+rec.active['employee name']:' – employee name not found in file'}`);
-    }catch(e){bad++;add('bad',`${f.name}: could not be read (${e.message||e})`)}
+    }catch(e){bad++;add('bad',`${f.name}: could not be read (${/password-protected|Encryption/i.test(e.message||'')?'file is encrypted in a way this page cannot open; open it in Excel, Save As a new .xlsx and upload that':(e.message||e)})`)}
   }
   await save();render();
   toast(`${added} added, ${upd} updated${bad?', '+bad+' rejected':''}`);
