@@ -67,7 +67,7 @@ td.wr{min-width:220px;max-width:320px}td.nw{white-space:nowrap}
 <div class="grid2">
   <div class="card">
     <h2>1. Employee information files</h2>
-    <p class="hint">Filename must be the Emp Code (e.g. 0001.xlsx, 1001.xlsx). Select many files at once. A new code is added; an existing code is replaced with the latest file. Nothing else is touched.</p>
+    <p class="hint">Both .xls and .xlsx files are accepted. Filename must be the Emp Code (e.g. 0001.xlsx, 1001.xls). Select many files at once. A new code is added; an existing code is replaced with the latest file. Nothing else is touched.</p>
     <div class="drop" id="drop"><b>Click to choose</b> or drag &amp; drop employee files here<input type="file" id="empFiles" accept=".xlsx,.xls,.xlsm" multiple hidden></div>
     <div class="log" id="log"></div>
   </div>
@@ -75,7 +75,7 @@ td.wr{min-width:220px;max-width:320px}td.nw{white-space:nowrap}
     <h2>2. Master Sheet template</h2>
     <p class="hint">Your template is saved here, so you never need to upload it again. Upload a file only when the template changes; the new one then replaces it for all future exports. Sheet names, headings, column order and styling are kept exactly.</p>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <button class="btn" id="tplBtn">Replace template (only if changed)</button><input type="file" id="tplFile" accept=".xlsx" hidden>
+      <button class="btn" id="tplBtn">Replace template (only if changed)</button><input type="file" id="tplFile" accept=".xlsx,.xls" hidden>
       <span id="tplName" class="pill ok"></span>
     </div>
     <p class="hint" style="margin-top:14px">Sheets: <b>Active</b>, <b>Dependant Details</b>, <b>Experience</b>. Missing details stay blank; nothing is guessed.</p>
@@ -403,7 +403,10 @@ drop.addEventListener('drop',ev=>{if(ev.dataTransfer.files.length)handleFiles([.
 $('tplBtn').onclick=()=>$('tplFile').click();
 $('tplFile').onchange=async e=>{
   const f=e.target.files[0];e.target.value='';if(!f)return;
-  try{const buf=await f.arrayBuffer();await loadTemplateInfo(buf,f.name);await kvSet('template',{buf,name:f.name+' (saved)',ver:TEMPLATE_VER});tpl.name=f.name+' (saved)';toast('New template saved – it will be used for every export');render()}
+  try{
+    let buf=await f.arrayBuffer(),note='';
+    if(/\.xls$/i.test(f.name)){buf=XLSX.write(XLSX.read(buf,{type:'array'}),{type:'array',bookType:'xlsx'});note=' Converted from .xls; original cell styling may not carry over, so .xlsx is best for the template.'}
+    await loadTemplateInfo(buf,f.name);await kvSet('template',{buf,name:f.name+' (saved)',ver:TEMPLATE_VER});tpl.name=f.name+' (saved)';toast('New template saved – it will be used for every export.'+note);render()}
   catch(err){toast(err.message||'Could not read template')}
 };
 $('exportBtn').onclick=exportXlsx;

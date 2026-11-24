@@ -2,7 +2,7 @@
 
 Static web app (single `index.html`, no build step).
 
-- Upload many employee info files at once (filename = Emp Code, e.g. `0001.xlsx`)
+- Upload many employee info files (.xls or .xlsx) at once (filename = Emp Code, e.g. `0001.xlsx`, `1001.xls`)
 - New code = added; existing code = replaced; no duplicates; per-file delete
 - Master Sheet template is built in (`template/Master_Sheet.xlsx` is a reference copy)
 - Export all data to Excel in the Master Sheet format
@@ -17,4 +17,3 @@ Static web app (single `index.html`, no build step).
 Employee records are stored in the browser (IndexedDB) of the device you use. They are not sent to any server,
 and are not shared between browsers or devices. Export to Excel regularly as your backup.
 Protect the site (Vercel project > Settings > Deployment Protection) because it handles personal data.
-"# Employee-Master-Dashboard" 
