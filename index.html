@@ -256,7 +256,7 @@ async function maybeDecrypt(buf){
   const info=c.find('EncryptionInfo'),pkg=c.find('EncryptedPackage');
   if(!info||!pkg)return buf;
   const major=info[0]|(info[1]<<8),minor=info[2]|(info[3]<<8);
-  if(!(minor===4&&major===4)&&minor!==2)throw new Error('unsupported encryption type');
+  if(!(minor===4&&major===4)&&minor!==2)throw new Error('encryption v'+major+'.'+minor+' is not supported');
   for(const pw of PW_ORDER){
     try{
       const o=minor===4?await agileDecrypt(info,pkg,pw):await stdDecrypt(info,pkg,pw);
@@ -308,7 +308,12 @@ function table(G,titlePrefix,headFirst,cols){
   return rows;
 }
 function parseEmployee(buf,code,fileName){
-  const wb=XLSX.read(buf,{type:'array',cellNF:true});
+  let wb,lastErr;
+  for(const pw of [undefined,'VelvetSweatshop','']){
+    try{wb=XLSX.read(buf,{type:'array',cellNF:true,password:pw});break}
+    catch(e){lastErr=e;if(!/password|encrypt|incorrect/i.test(e.message||''))throw e}
+  }
+  if(!wb)throw lastErr;
   const ws=wb.Sheets['Information Sheet']||wb.Sheets[wb.SheetNames[0]];
   const G=readGrid(ws);
   const fam=table(G,'family information','name',{name:'name',rel:'relationship',mob:'contact number'});
@@ -370,6 +375,23 @@ async function loadTemplateInfo(buf,name){
 }
 
 /* ---------- uploads ---------- */
+function diag(raw){
+  const b=u8(raw),h=Array.from(b.subarray(0,4)).map(x=>x.toString(16).padStart(2,'0')).join('');
+  if(b[0]===0x50&&b[1]===0x4b)return'format: normal xlsx (zip)';
+  if(h==='d0cf11e0'){
+    try{const c=cfbRead(b),i=c.find('EncryptionInfo');
+      if(i)return'format: encrypted xlsx v'+i[0]+'.'+i[2];
+      if(c.find('Workbook')||c.find('Book'))return'format: old .xls (BIFF)';
+      return'format: OLE container without a workbook'}
+    catch(e){return'format: OLE container, unreadable ('+e.message+')'}
+  }
+  return'format: unknown, starts with '+h;
+}
+async function loadEmp(f,code){
+  const raw=await f.arrayBuffer();
+  try{return parseEmployee(await maybeDecrypt(raw),code,f.name)}
+  catch(e){e.diag=diag(raw);throw e}
+}
 async function handleFiles(files){
   const log=$('log');log.innerHTML='';let added=0,upd=0,bad=0;
   const add=(cls,t)=>log.insertAdjacentHTML('beforeend',`<div><span class="pill ${cls}">${cls==='ok'?'OK':cls==='warn'?'Check':'Rejected'}</span> ${esc(t)}</div>`);
@@ -378,10 +400,10 @@ async function handleFiles(files){
     if(!/\.(xlsx|xls|xlsm)$/i.test(f.name)){bad++;add('bad',`${f.name}: not an Excel file`);continue}
     if(!m){bad++;add('bad',`${f.name}: filename must be a numeric Emp Code`);continue}
     try{
-      const rec=parseEmployee(await maybeDecrypt(await f.arrayBuffer()),m[1],f.name),k=key(m[1]),exists=!!records[k];
+      const rec=await loadEmp(f,m[1]),k=key(m[1]),exists=!!records[k];
       records[k]=rec;exists?upd++:added++;
       add(rec.active['employee name']?'ok':'warn',`${f.name}: Emp Code ${m[1]} ${exists?'updated':'added'}${rec.active['employee name']?' – '+rec.active['employee name']:' – employee name not found in file'}`);
-    }catch(e){bad++;add('bad',`${f.name}: could not be read (${/password-protected|Encryption/i.test(e.message||'')?'file is encrypted in a way this page cannot open; open it in Excel, Save As a new .xlsx and upload that':(e.message||e)})`)}
+    }catch(e){bad++;add('bad',`${f.name}: could not be read (${e.message||e}${e.diag?' | '+e.diag:''}). If the file is locked, open it in Excel, remove the password or sensitivity label, Save As a new .xlsx and upload that.`)}
   }
   await save();render();
   toast(`${added} added, ${upd} updated${bad?', '+bad+' rejected':''}`);
